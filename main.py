@@ -1,3 +1,5 @@
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
+from langchain_core.output_parsers import StrOutputParser
 from langchain_community.document_loaders import YoutubeLoader 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -58,20 +60,68 @@ vector_store.index_to_docstore_id
 
 # Step 2 - Retrieval
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
-print(retriever.invoke('What is Langgraph?'))
+# print(retriever.invoke('What is Langgraph?'))
 
 
 
 # Step 3 - Augmentation
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-latest")
-prompt = PromptTemplate(
-    template="""
-      You are a helpful assistant.
-      Answer ONLY from the provided transcript context.
-      If the context is insufficient, just say you don't know.
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
 
-      {context}
-      Question: {question}
+prompt = PromptTemplate(
+    template = """
+    You are a helpful and knowledgeable assistant named "Video Sage," designed to answer questions about YouTube videos.
+
+    **Your Task:**
+    Based *only* on the provided transcript from the video, provide a comprehensive and helpful answer to the user's question. 
+    While you should not use outside knowledge, you can elaborate on the topics mentioned in the transcript to provide a full explanation, as long as it remains true to the video's content.
+
+    **Guidelines:**
+    1.  Carefully analyze the "Transcript Context" to find the most relevant information.
+    2.  Formulate a clear, elaborate, and helpful response that maintains the main concepts from the video.
+    3.  If the transcript doesn't contain the answer, you MUST state: "I'm sorry, but the video transcript doesn't seem to cover that topic." Do not guess or infer information not present.
+    4.  Always respond in the same language as the user's question.
+
+    **Transcript Context:**
+    {context}
+
+    **User's Question:**
+    {question}
+
+    **Your Answer:**
     """,
     input_variables = ['context', 'question']
 )
+
+# Sample Question to Test the System
+question = "What do I need to know to get started with Langgraph? How can I start making projects with it?"
+# Retrieve relevant documents from the vector store
+retrieved_docs = retriever.invoke(question)
+# Combine the retrieved document contents into a single context string
+context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
+# Final prompt by filling in the template with context and question
+final_prompt = prompt.invoke({"context": context_text, "question": question})
+
+
+# Step 4 - Generation
+# response = llm.invoke(final_prompt)
+# print("LLM Response:")
+# print(response.text)
+
+
+
+# Building in Chain
+def format_docs(retrieved_docs):
+  context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
+  return context_text
+
+# Create a parallel runnable to handle both context retrieval and question passing
+parallel_chain = RunnableParallel({
+    'context': retriever | RunnableLambda(format_docs),
+    'question': RunnablePassthrough()
+})
+
+# Create a string output parser
+parser = StrOutputParser()
+# Connect the parser to the main chain
+main_chain = parallel_chain | prompt | llm | parser
+print(main_chain.invoke('Can you summarize the video'))
