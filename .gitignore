@@ -1,0 +1,12 @@
+# ignore dotenv files
+.env
+.env.local
+.env.* 
+
+# (optional) ignore virtual envs and caches
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.vscode/
+.DS_Store
