@@ -1,6 +1,10 @@
-youtube-transcript-api
+streamlit
+langchain
+langchain-core
 langchain-community
-langchain-openai
+langchain-google-genai
 faiss-cpu
-tiktoken
+sentence-transformers
 python-dotenv
+youtube-transcript-api
+pytube
